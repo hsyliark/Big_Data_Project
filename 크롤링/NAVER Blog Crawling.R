@@ -1,7 +1,7 @@
 ## https://developers.naver.com/main/ # 네이버 개발자 계정 홈페이지 
 
 urlStr <- "https://openapi.naver.com/v1/search/blog.xml?" # 기본 url 생성 
-searchString <- "query=어린이집" # 쿼리생성 
+searchString <- "query=맞벌이부부" # 쿼리생성 
 searchString <- iconv(searchString, to="UTF-8") # 인코딩 
 searchString <- URLencode(searchString)
 searchString
@@ -58,7 +58,7 @@ babymom <- Filter(function(x) {nchar(x)>=2 & nchar(x)<=5}, babymom)
 wordcount <- table(babymom)
 head(sort(wordcount,decreasing=T),100)
 require(wordcloud2)
-wordcloud2(wordcount[wordcount>3],size=8,col="random-dark",rotateRatio=0.5,
+wordcloud2(wordcount[wordcount>2],size=8,col="random-dark",rotateRatio=0.5,
            backgroundColor="white",shape="circle")
 
 
@@ -131,7 +131,7 @@ library(dplyr)
 table(result$remark)
 
 remark <- c("긍정","부정","중립")
-count <- c(66,23,2404)
+count <- c(42,17,2328)
 result1 <- data.frame(remark=remark,count=count)
 result1 <- result1 %>%
   mutate(pct=round(count/sum(count)*100,2)) %>%
