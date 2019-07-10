@@ -14,8 +14,8 @@ reqUrl # 요청할 url 생성
 install.packages("httr")
 library(httr)
 
-clientid <- "GC_RIpLxQUqT9NK1OkmC" # 개인 api id 값
-clientSecret <- "bLbCIIo2GT" # 개인 apu secret 값
+clientid <- "**************" # 개인 api id 값
+clientSecret <- "**************" # 개인 apu secret 값
 
 apiResult <- GET(reqUrl, add_headers("X-Naver-Client-Id"=clientid, 
                                      "X-Naver-Client-Secret"=clientSecret))
