@@ -1,7 +1,7 @@
 ## https://developers.naver.com/main/ # 네이버 개발자 계정 홈페이지 
 
 urlStr <- "https://openapi.naver.com/v1/search/blog.xml?" # 기본 url 생성 
-searchString <- "query=맞벌이부부" # 쿼리생성 
+searchString <- "query=신혼부부" # 쿼리생성 
 searchString <- iconv(searchString, to="UTF-8") # 인코딩 
 searchString <- URLencode(searchString)
 searchString
@@ -39,22 +39,28 @@ useSejongDic()
 library(dplyr)
 library(stringr)
 
-babymom <- gsub("<(\\/?)(\\w+)*([^<>]*)>", " ", result)
-babymom <- gsub("[[:punct:]]", " ", babymom) # 특수문자 제거
-babymom <- gsub("[A-z]", " ", babymom) # 모든 영문자 제거
-babymom <- gsub("[0-9]", " ", babymom) # 숫자 제거
-babymom <- gsub(" +", " ", babymom)
-babymom <- gsub("^"," ", babymom)
-babymom <- gsub("ㅋ"," ", babymom)
-babymom <- gsub("ㅎ"," ", babymom)
-babymom <- gsub("ㅜ"," ", babymom)
-babymom <- gsub("개월아기","아기",babymom)
 
-babymom
-
-babymom <- sapply(babymom,extractNoun,USE.NAMES=F)
+babymom <- result
+babymom <- gsub("<(\\/?)(\\w+)*([^<>]*)>", "", babymom)
+babymom <- gsub("[[:punct:]]", "", babymom) # 문장부호 제거
+babymom <- gsub("[[:cntrl:]]","",babymom) # 특수문자 제거
+babymom <- gsub("[A-z]", "", babymom) # 모든 영문자 제거
+babymom <- gsub("[0-9]", "", babymom) # 숫자 제거
+babymom <- gsub(" +", "", babymom)
+babymom <- gsub("^","", babymom)
+babymom <- gsub("ㅋ","", babymom)
+babymom <- gsub("ㅎ","", babymom)
+babymom <- gsub("ㅜ","", babymom)
+babymom <- gsub("naver","",babymom)
+babymom <- gsub("blog","",babymom)
+babymom <- gsub("https","",babymom)
+babymom <- gsub("link","",babymom)
+babymom <- gsub("title","",babymom)
+babymom <- gsub("com","",babymom)
+babymom <- gsub(" ","",babymom)
+babymom <- sapply(result,extractNoun,USE.NAMES=F)
+babymom <- Filter(function(x) {nchar(x)>=2 & nchar(x)<=4}, babymom)
 babymom <- unlist(babymom)
-babymom <- Filter(function(x) {nchar(x)>=2 & nchar(x)<=5}, babymom)
 wordcount <- table(babymom)
 head(sort(wordcount,decreasing=T),100)
 require(wordcloud2)
@@ -147,7 +153,46 @@ ggplot(result1,aes(x="",y=pct,fill=remark)) +
   xlab("") + ylab("") +
   ggtitle("육아 관련 네이버 블로그 감성분석") +
   theme(plot.title=element_text(color="black",size=16,face="bold",hjust=0.5))
-    
+
+
+
+
+## Associate analysis
+# 출처 : http://blog.naver.com/PostView.nhn?blogId=nonamed0000&logNo=220959156052&categoryNo=24&parentCategoryNo=0&viewDate=&currentPage=1&postListTopCurrentPage=1&from=postView
+
+library(tm)
+library(arules) 
+
+result
+class(result)
+
+test <- result
+
+test <- str_split(test, "</title>")
+
+
+str(test)
+View(test)
+test[[1]][3]
+length(test[[1]])
+
+stest <- c()
+for(i in 1:102) {
+  stest <- c(stest, test[[1]][i])
+}
+head(stest)
+
+babymom <- Corpus(VectorSource(babymom))
+inspect(babymom)
+
+wordtran <- as(babymom, "transactions") # lword에 중복데이터가 있으면 error발생
+wordtran 
+
+
+
+
+
+
     
     
 
