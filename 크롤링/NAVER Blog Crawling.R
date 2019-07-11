@@ -1,7 +1,7 @@
 ## https://developers.naver.com/main/ # 네이버 개발자 계정 홈페이지 
 
 urlStr <- "https://openapi.naver.com/v1/search/blog.xml?" # 기본 url 생성 
-searchString <- "query=육아휴직" # 쿼리생성 
+searchString <- "query=어린이집,맞벌이,육아휴직,경력단절" # 쿼리생성 
 searchString <- iconv(searchString, to="UTF-8") # 인코딩 
 searchString <- URLencode(searchString)
 searchString
@@ -14,8 +14,8 @@ reqUrl # 요청할 url 생성
 install.packages("httr")
 library(httr)
 
-clientid <- "GC_RIpLxQUqT9NK1OkmC" # 개인 api id 값
-clientSecret <- "bLbCIIo2GT" # 개인 apu secret 값
+clientid <- "*****************" # 개인 api id 값
+clientSecret <- "***************" # 개인 apu secret 값
 
 apiResult <- GET(reqUrl, add_headers("X-Naver-Client-Id"=clientid, 
                                      "X-Naver-Client-Secret"=clientSecret))
@@ -62,7 +62,7 @@ babymom <- unlist(babymom)
 wordcount <- table(babymom)
 head(sort(wordcount,decreasing=T),100)
 require(wordcloud2)
-wordcloud2(wordcount[wordcount>1],size=7,col="random-dark",rotateRatio=0.5,
+wordcloud2(wordcount,size=5,col="random-dark",rotateRatio=0.5,
            backgroundColor="white",shape="circle")
 
 
@@ -71,7 +71,114 @@ wordcloud2(wordcount[wordcount>1],size=7,col="random-dark",rotateRatio=0.5,
 
 
 
-## sentimental analysis
+## Association Analysis
+# 출처1 : http://blog.naver.com/PostView.nhn?blogId=nonamed0000&logNo=220959156052&categoryNo=24&parentCategoryNo=0&viewDate=&currentPage=1&postListTopCurrentPage=1&from=postView
+# 출처2 : http://blog.naver.com/PostView.nhn?blogId=nonamed0000&logNo=220965696087&parentCategoryNo=&categoryNo=24&viewDate=&isShowPopularPosts=false&from=postView
+
+library(tm)
+library(arules) 
+
+require(stringr)
+ass.result <- result
+ass.result <- str_split(ass.result, "</title>")
+
+str(ass.result)
+
+ass.babymom <- c()
+for(i in 1:length(ass.result[[1]])) {
+  ass.babymom <- c(ass.babymom, ass.result[[1]][i])
+}
+head(ass.babymom,10)
+
+ass.babymom <- gsub("<(\\/?)(\\w+)*([^<>]*)>","",ass.babymom)
+ass.babymom <- gsub("[[:punct:]]","",ass.babymom) # 문장부호 제거
+ass.babymom <- gsub("[[:cntrl:]]","",ass.babymom) # 특수문자 제거
+ass.babymom <- gsub("[A-z]","",ass.babymom) # 모든 영문자 제거
+ass.babymom <- gsub("[0-9]","",ass.babymom) # 숫자 제거
+ass.babymom <- gsub("^","",ass.babymom)
+ass.babymom <- gsub("ㅋ","",ass.babymom)
+ass.babymom <- gsub("ㅎ","",ass.babymom)
+ass.babymom <- gsub("ㅜ","",ass.babymom)
+
+require(KoNLP)
+lword <- Map(extractNoun,ass.babymom) 
+lword <- unique(lword) # 중복제거1(전체 대상)
+lword <- sapply(lword, unique) # 중복제거2(줄 단위 대상) 
+lword[1:5] # 추출 단어 확인
+
+
+# 1) 길이가 2~4 사이의 단어 필터링 함수 정의
+filter1 <- function(x){
+  nchar(x) <= 4 && nchar(x) >= 2 && is.hangul(x)
+}
+# 2) Filter(f,x) -> filter1() 함수를 적용하여 x 벡터 단위 필터링 
+filter2 <- function(x){
+  Filter(filter1, x)
+}
+# 3) 줄 단어 대상 필터링
+lword <- sapply(lword, filter2)
+lword # 추출 단어 확인(길이 1개 단어 삭제됨)
+
+
+wordtran <- as(lword, "transactions") # lword에 중복데이터가 있으면 error발생
+wordtran 
+
+# 트랜잭션 내용 보기 -> 각 트랜잭션의 단어 보기
+inspect(wordtran)  
+
+# 동일한 단어끼리 교차테이블 작성 
+wordtable <- crossTable(wordtran) # 교차표 작성
+
+
+## 지지도, 신뢰도, 향상도
+
+# 1. 지지도(support) : 전체자료에서 A를 구매한 후 B를 구매하는 거래 비율  
+# A->B 지지도 식  
+# -> A와 B를 포함한 거래수 / 전체 거래수 
+# -> n(A, B) : 두 항목(A,B)이 동시에 포함되는 거래수 
+# -> n : 전체 거래 수 
+
+# 2. 신뢰도(confidence) : A가 포함된 거래 중에서 B를 포함한 거래의 비율(조건부 확률) 
+# A->B 신뢰도 식 
+# -> A와 B를 포함한 거래수 / A를 포함한 거래수 
+
+# 3. 향상도(Lift) : 하위 항목들이 독립에서 얼마나 벗어나는지의 정도를 측정한 값 
+# 향상도 식 
+# -> 신뢰도 / B가 포함될 거래율 
+# 분자와 분모가 동일한 경우 : Lift == 1, A와 B가 독립(상관없음) 
+# 분자와 분모가 동일한 경우 : Lift != 1, x와 y가 독립이 아닌 경우(상관있음)
+
+tranrules <- apriori(wordtran, parameter=list(supp=0.4, conf=0.05, minlen=2)) 
+inspect(tranrules) # 연관규칙 생성 결과 보기
+
+library(arulesViz) # rules값 대상 그래프를 그리는 패키지
+# plot(tranrules, method="graph", control=list(type="items"))
+plot(tranrules, method="graph")
+
+# (1) 데이터 구조 변경 : 연관규칙 결과 -> 행렬구조 변경(matrix 또는 data.frame) 
+rules <- labels(tranrules, ruleSep=" ")  
+# 문자열로 묶인 연관단어를 행렬구조 변경 
+rules <- sapply(rules, strsplit, " ",  USE.NAMES=F) 
+# 행 단위로 묶어서 matrix로 반환
+rulemat <- do.call("rbind", rules)
+# (2) 연관어 시각화를 위한 igraph 패키지 설치
+library(igraph)   
+# (3) edgelist보기 - 연관단어를 정점 형태의 목록 제공 
+# ruleg <- graph.edgelist(rulemat[c(6:40),], directed=F) # [1,]~[5,] "{}" 제외
+ruleg <- graph.edgelist(rulemat, directed=F)
+ruleg
+# (4) edgelist 시각화
+plot.igraph(ruleg, vertex.label=V(ruleg)$name,
+            vertex.label.cex=1.2, vertex.label.color='black', 
+            vertex.size=20, vertex.color='gray', vertex.frame.color='blue')
+
+
+
+
+
+
+
+## Sentimental Analysis
 # 출처 : https://github.com/park1200656/KnuSentiLex (군산대 감성사전)
 # site : https://goo-eungs.tistory.com/22 
 # 서울연구원 : https://www.si.re.kr/search/node?keys=%EC%B6%9C%EC%82%B0&type%5B%5D=infographics&ptimes=total&created%5Bmin%5D=&created%5Bmax%5D=
@@ -114,28 +221,28 @@ sentimental <- function(sentences,positive,negative) {
   return(scores.df)
 }
 
-result <- sentimental(babymom,positive,negative)
-result$color[result$score >= 1] <- "blue"
-result$color[result$score == 0] <- "green"
-result$color[result$score < 0] <- "red"
+sen.result <- sentimental(babymom,positive,negative)
+sen.result$color[sen.result$score >= 1] <- "blue"
+sen.result$color[sen.result$score == 0] <- "green"
+sen.result$color[sen.result$score < 0] <- "red"
 
-table(result$color)
+table(sen.result$color)
 
-result$remark[result$score >= 1] <- "긍정"
-result$remark[result$score == 0] <- "중립"
-result$remark[result$score < 0] <- "부정"
+sen.result$remark[sen.result$score >= 1] <- "긍정"
+sen.result$remark[sen.result$score == 0] <- "중립"
+sen.result$remark[sen.result$score < 0] <- "부정"
 
-sentiment_result <- table(result$remark)
+sentiment_result <- table(sen.result$remark)
 
 pie(sentiment_result,main="감성분석 결과",col=c("blue","red","green"),radius=0.8)
 
 library(ggplot2)
 library(dplyr)
 
-table(result$remark)
+table(sen.result$remark)
 
 remark <- c("긍정","부정","중립")
-count <- c(66,10,1852)
+count <- c(39,23,2003)
 result1 <- data.frame(remark=remark,count=count)
 result1 <- result1 %>%
   mutate(pct=round(count/sum(count)*100,2)) %>%
@@ -155,111 +262,6 @@ ggplot(result1,aes(x="",y=pct,fill=remark)) +
 
 
 
-## Associate analysis
-# 출처1 : http://blog.naver.com/PostView.nhn?blogId=nonamed0000&logNo=220959156052&categoryNo=24&parentCategoryNo=0&viewDate=&currentPage=1&postListTopCurrentPage=1&from=postView
-# 출처2 : http://blog.naver.com/PostView.nhn?blogId=nonamed0000&logNo=220965696087&parentCategoryNo=&categoryNo=24&viewDate=&isShowPopularPosts=false&from=postView
-
-library(tm)
-library(arules) 
-
-result
-class(result)
-
-require(stringr)
-ass.result <- result
-ass.result <- str_split(ass.result, "</title>")
-
-str(ass.result)
-View(ass.result)
-ass.result[[1]][3]
-length(ass.result[[1]])
-
-ass.babymom <- c()
-for(i in 1:length(ass.result[[1]])) {
-  ass.babymom <- c(ass.babymom, ass.result[[1]][i])
-}
-head(ass.babymom,10)
-
-ass.babymom <- gsub("<(\\/?)(\\w+)*([^<>]*)>","",ass.babymom)
-ass.babymom <- gsub("[[:punct:]]","",ass.babymom) # 문장부호 제거
-ass.babymom <- gsub("[[:cntrl:]]","",ass.babymom) # 특수문자 제거
-ass.babymom <- gsub("[A-z]","",ass.babymom) # 모든 영문자 제거
-ass.babymom <- gsub("[0-9]","",ass.babymom) # 숫자 제거
-ass.babymom <- gsub("^","",ass.babymom)
-ass.babymom <- gsub("ㅋ","",ass.babymom)
-ass.babymom <- gsub("ㅎ","",ass.babymom)
-ass.babymom <- gsub("ㅜ","",ass.babymom)
-
-require(KoNLP)
-lword <- Map(extractNoun,ass.babymom) 
-lword <- unique(lword) # 중복제거1(전체 대상)
-
-lword <- sapply(lword, unique) # 중복제거2(줄 단위 대상) 
-lword[1:5] # 추출 단어 확인
-
-
-# 1) 길이가 2~4 사이의 단어 필터링 함수 정의
-filter1 <- function(x){
-  nchar(x) <= 4 && nchar(x) >= 2 && is.hangul(x)
-}
-# 2) Filter(f,x) -> filter1() 함수를 적용하여 x 벡터 단위 필터링 
-filter2 <- function(x){
-  Filter(filter1, x)
-}
-# 3) 줄 단어 대상 필터링
-lword <- sapply(lword, filter2)
-lword # 추출 단어 확인(길이 1개 단어 삭제됨)
-
-
-wordtran <- as(lword, "transactions") # lword에 중복데이터가 있으면 error발생
-wordtran 
-
-# 트랜잭션 내용 보기 -> 각 트랜잭션의 단어 보기
-inspect(wordtran)  
-
-# 동일한 단어끼리 교차테이블 작성 
-wordtable <- crossTable(wordtran) # 교차표 작성
-
-## 지지도, 신뢰도, 향상도
-
-# 1. 지지도(support) : 전체자료에서 A를 구매한 후 B를 구매하는 거래 비율  
-# A->B 지지도 식  
-# -> A와 B를 포함한 거래수 / 전체 거래수 
-# -> n(A, B) : 두 항목(A,B)이 동시에 포함되는 거래수 
-# -> n : 전체 거래 수 
-
-# 2. 신뢰도(confidence) : A가 포함된 거래 중에서 B를 포함한 거래의 비율(조건부 확률) 
-# A->B 신뢰도 식 
-# -> A와 B를 포함한 거래수 / A를 포함한 거래수 
-
-# 3. 향상도(Lift) : 하위 항목들이 독립에서 얼마나 벗어나는지의 정도를 측정한 값 
-# 향상도 식 
-# -> 신뢰도 / B가 포함될 거래율 
-# 분자와 분모가 동일한 경우 : Lift == 1, A와 B가 독립(상관없음) 
-# 분자와 분모가 동일한 경우 : Lift != 1, x와 y가 독립이 아닌 경우(상관있음)
-
-tranrules <- apriori(wordtran, parameter=list(supp=0.20, conf=0.05)) 
-inspect(tranrules) # 연관규칙 생성 결과 보기
-
-library(arulesViz) # rules값 대상 그래프를 그리는 패키지
-# plot(tranrules, method="graph", control=list(type="items"))
-plot(tranrules, method="graph")
-
-# (1) 데이터 구조 변경 : 연관규칙 결과 -> 행렬구조 변경(matrix 또는 data.frame) 
-rules <- labels(tranrules, ruleSep=" ")  
-# 문자열로 묶인 연관단어를 행렬구조 변경 
-rules <- sapply(rules, strsplit, " ",  USE.NAMES=F) 
-# 행 단위로 묶어서 matrix로 반환
-rulemat <- do.call("rbind", rules)
-# (2) 연관어 시각화를 위한 igraph 패키지 설치
-library(igraph)   
-# (3) edgelist보기 - 연관단어를 정점 형태의 목록 제공 
-ruleg <- graph.edgelist(rulemat[c(6:40),], directed=F) # [1,]~[5,] "{}" 제외
-ruleg
-# (4) edgelist 시각화
-plot.igraph(ruleg, vertex.label=V(ruleg)$name,
-            vertex.label.cex=1.2, vertex.label.color='black', 
-            vertex.size=20, vertex.color='gray', vertex.frame.color='blue')
 
 
 
